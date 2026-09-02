@@ -8,17 +8,28 @@ import * as THREE from "three";
 
 interface AvatarViewerProps {
   outfit: WardrobeItem[] | null;
+  selectedItem?: WardrobeItem | null;
 }
 
 // Simple procedural avatar
-function PlaceholderAvatar({ outfit }: { outfit: WardrobeItem[] | null }) {
+function PlaceholderAvatar({ outfit, selectedItem }: { outfit: WardrobeItem[] | null; selectedItem?: WardrobeItem | null }) {
   const groupRef = useRef<THREE.Group>(null);
 
-  // Parse outfit colors
-  const shirt = outfit?.find(i => i.type === 'shirt');
-  const pants = outfit?.find(i => i.type === 'pants');
-  const shoes = outfit?.find(i => i.type === 'shoes');
-  const jacket = outfit?.find(i => i.type === 'jacket' || i.category?.includes('outerwear'));
+  const normalize = (value?: string) => (value ?? '').toLowerCase();
+  const matchesTypeOrCategory = (item: WardrobeItem, values: string[]) => {
+    const haystacks = [normalize(item.type), normalize(item.category)];
+    return values.some((value) => haystacks.some((haystack) => haystack.includes(value)));
+  };
+
+  const effectiveOutfit = selectedItem
+    ? [selectedItem, ...(outfit ?? []).filter((item) => item.id !== selectedItem.id)]
+    : outfit;
+
+  const top = effectiveOutfit?.find((item) => matchesTypeOrCategory(item, ['shirt', 'top', 'tee', 't-shirt', 'polo', 'blouse']));
+  const bottom = effectiveOutfit?.find((item) => matchesTypeOrCategory(item, ['pants', 'trousers', 'jeans', 'shorts', 'bottom', 'skirt']));
+  const footwear = effectiveOutfit?.find((item) => matchesTypeOrCategory(item, ['shoes', 'sneakers', 'boots', 'loafers', 'footwear']));
+  const layer = effectiveOutfit?.find((item) => matchesTypeOrCategory(item, ['layer', 'jacket', 'blazer', 'coat', 'cardigan', 'outerwear']));
+  const accessory = effectiveOutfit?.find((item) => matchesTypeOrCategory(item, ['watch', 'accessory', 'cap', 'hat', 'belt']));
 
   const skinColor = "#f5d0b5";
   const getHex = (item?: WardrobeItem) => {
@@ -26,10 +37,11 @@ function PlaceholderAvatar({ outfit }: { outfit: WardrobeItem[] | null }) {
     return `rgb(${item.reds}, ${item.green}, ${item.blue})`;
   };
 
-  const shirtColor = getHex(shirt) || "#ffffff";
-  const pantsColor = getHex(pants) || "#333333";
-  const shoesColor = getHex(shoes) || "#111111";
-  const jacketColor = getHex(jacket);
+  const shirtColor = getHex(top) || "#ffffff";
+  const pantsColor = getHex(bottom) || "#333333";
+  const shoesColor = getHex(footwear) || "#111111";
+  const jacketColor = getHex(layer);
+  const accessoryColor = getHex(accessory) || "#c4b5fd";
 
   // Subtle breathing animation
   useFrame((state) => {
@@ -53,17 +65,25 @@ function PlaceholderAvatar({ outfit }: { outfit: WardrobeItem[] | null }) {
         <meshStandardMaterial color={skinColor} roughness={0.4} />
       </mesh>
 
-      {/* Torso / Shirt */}
+      {/* Torso / Top */}
       <mesh position={[0, 2.0, 0]}>
         <boxGeometry args={[0.9, 1.4, 0.5]} />
         <meshStandardMaterial color={shirtColor} roughness={0.7} />
       </mesh>
 
-      {/* Jacket Layer (slightly larger than torso if present) */}
+      {/* Layer / outerwear */}
       {jacketColor && (
         <mesh position={[0, 2.05, 0]}>
           <boxGeometry args={[0.95, 1.5, 0.55]} />
           <meshStandardMaterial color={jacketColor} roughness={0.8} />
+        </mesh>
+      )}
+
+      {/* Accessory (watch / cap / belt) */}
+      {accessory && (
+        <mesh position={[0.55, 1.8, 0.08]} rotation={[0, 0, -0.6]}>
+          <boxGeometry args={[0.12, 0.08, 0.14]} />
+          <meshStandardMaterial color={accessoryColor} roughness={0.5} />
         </mesh>
       )}
 
@@ -100,7 +120,7 @@ function PlaceholderAvatar({ outfit }: { outfit: WardrobeItem[] | null }) {
   );
 }
 
-export default function AvatarViewer({ outfit }: AvatarViewerProps) {
+export default function AvatarViewer({ outfit, selectedItem }: AvatarViewerProps) {
   return (
     <Canvas
       camera={{ position: [0, 1, 5], fov: 50 }}
@@ -115,7 +135,7 @@ export default function AvatarViewer({ outfit }: AvatarViewerProps) {
       <Environment preset="city" />
 
       <Float speed={1.5} rotationIntensity={0.1} floatIntensity={0.1}>
-        <PlaceholderAvatar outfit={outfit} />
+        <PlaceholderAvatar outfit={outfit} selectedItem={selectedItem} />
       </Float>
 
       <ContactShadows 

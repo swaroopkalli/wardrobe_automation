@@ -9,9 +9,16 @@ import InteractiveParticleField from "./effects/InteractiveParticleField";
 
 export default function WardrobeApp() {
   const [items, setItems] = useState<WardrobeItem[]>([]);
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [recommending, setRecommending] = useState(false);
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
+  const avatarOutfit = selectedItem
+    ? [selectedItem, ...(recommendation?.outfit ?? []).filter((item) => item.id !== selectedItem.id)]
+    : recommendation?.outfit ?? null;
 
   useEffect(() => {
     fetchItems();
@@ -19,10 +26,12 @@ export default function WardrobeApp() {
 
   const fetchItems = async () => {
     try {
+      setError(null);
       const data = await api.getWardrobeItems();
       setItems(data);
     } catch (err) {
       console.error(err);
+      setError('Unable to load wardrobe items from the API.');
     } finally {
       setLoading(false);
     }
@@ -30,14 +39,19 @@ export default function WardrobeApp() {
 
   const getRecommendation = async () => {
     setRecommending(true);
+    setError(null);
     try {
+      const availableTypes = [...new Set(items.map((item) => item.type).filter(Boolean))];
+      const requestedTypes = availableTypes.length ? availableTypes.slice(0, 6) : undefined;
+
       const data = await api.getRecommendation({
         strategy: "best",
-        required_types: ["shirt", "pants", "shoes", "jacket"],
+        required_types: requestedTypes,
       });
       setRecommendation(data);
     } catch (err) {
       console.error(err);
+      setError('Recommendation request failed. Please try again.');
     } finally {
       setRecommending(false);
     }
@@ -78,7 +92,7 @@ export default function WardrobeApp() {
             <h2 className="text-sm font-semibold tracking-wider text-slate-400 uppercase mb-4">Actions</h2>
             <button
               onClick={getRecommendation}
-              disabled={recommending}
+              disabled={recommending || loading || items.length === 0}
               className="w-full relative overflow-hidden group rounded-xl p-4 transition-all duration-300 hover:scale-[1.02] active:scale-95 disabled:opacity-50"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-600 opacity-80 group-hover:opacity-100 transition-opacity" />
@@ -91,6 +105,9 @@ export default function WardrobeApp() {
                 {recommending ? "Generating Outfit..." : "Recommend Best Outfit"}
               </div>
             </button>
+            {error && (
+              <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{error}</p>
+            )}
           </section>
 
           <AnimatePresence mode="popLayout">
@@ -136,23 +153,40 @@ export default function WardrobeApp() {
               <div className="flex items-center justify-center p-8">
                 <RefreshCcw className="w-6 h-6 animate-spin text-slate-500" />
               </div>
+            ) : items.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-white/10 bg-white/5 p-6 text-center text-sm text-slate-400">
+                No wardrobe items are available yet.
+              </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
-                {items.map((item) => (
-                  <div key={item.id} className="p-3 rounded-xl bg-white/5 border border-white/5 flex flex-col gap-2 hover:bg-white/10 transition-colors cursor-pointer group">
-                    <div className="flex justify-between items-start">
-                      <Shirt className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" />
-                      <div 
-                        className="w-3 h-3 rounded-full border border-white/20"
-                        style={{ backgroundColor: `rgb(${item.reds}, ${item.green}, ${item.blue})` }}
-                      />
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium truncate" title={item.item_name}>{item.item_name}</p>
-                      <p className="text-[10px] text-slate-500 capitalize">{item.type}</p>
-                    </div>
-                  </div>
-                ))}
+                {items.map((item) => {
+                  const isSelected = selectedItemId === item.id;
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSelectedItemId((current) => (current === item.id ? null : item.id))}
+                      className={`p-3 rounded-xl border flex flex-col gap-2 transition-all cursor-pointer group text-left ${
+                        isSelected
+                          ? 'bg-indigo-500/20 border-indigo-400/60 ring-1 ring-indigo-400/60 shadow-lg shadow-indigo-500/10'
+                          : 'bg-white/5 border-white/5 hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <Shirt className={`w-4 h-4 transition-colors ${isSelected ? 'text-indigo-200' : 'text-slate-400 group-hover:text-white'}`} />
+                        <div 
+                          className="w-3 h-3 rounded-full border border-white/20"
+                          style={{ backgroundColor: `rgb(${item.reds}, ${item.green}, ${item.blue})` }}
+                        />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium truncate" title={item.item_name}>{item.item_name}</p>
+                        <p className="text-[10px] text-slate-500 capitalize">{item.type}</p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -165,7 +199,7 @@ export default function WardrobeApp() {
         {/* Subtle background glow */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.15),transparent_50%)]" />
         
-        <AvatarViewer outfit={recommendation?.outfit || null} />
+        <AvatarViewer outfit={avatarOutfit} selectedItem={selectedItem} />
         
         <div className="absolute bottom-6 left-6 right-6 flex justify-center pointer-events-none">
           <div className="bg-black/50 backdrop-blur-md border border-white/10 text-white/60 text-xs px-4 py-2 rounded-full pointer-events-auto">
