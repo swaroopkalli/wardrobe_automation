@@ -1,16 +1,18 @@
 import itertools
 import random
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Sequence
+import networkx as nx
 
 
 class OutfitSearcher:
 
-    def __init__(self, graph):
+    def __init__(self, graph: nx.Graph):
         self.G = graph
         self._edge_weights: Dict[Tuple[str, str], float] = {}
         for u, v, d in self.G.edges(data=True):
-            self._edge_weights[(u, v)] = d.get("weight", 0.0)
-            self._edge_weights[(v, u)] = d.get("weight", 0.0)
+            w = d.get("weight", 0.0)
+            self._edge_weights[(u, v)] = w
+            self._edge_weights[(v, u)] = w
 
     def greedy_outfit(self, start_item: str) -> List[str]:
         if start_item not in self.G:
@@ -34,10 +36,9 @@ class OutfitSearcher:
 
         return outfit
 
-    def best_outfit(self, required_types: Optional[List[str]] = None) -> Dict[str, Any]:
+    def best_outfit(self, required_types: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """
-        Exact best outfit search using Branch and Bound.
-        Finds the combination of required types maximizing pairwise sum of compatibility edge weights.
+        Exact Branch-and-Bound search for globally optimal outfit across required item types.
         """
         if required_types is None:
             required_types = ["shirt", "pants", "shoes", "watch"]
@@ -50,7 +51,7 @@ class OutfitSearcher:
             for t in required_types
         }
 
-        # If any required type has no items in the graph, return empty/baseline match
+        # If any requested type is missing from the graph, return no outfit
         if any(len(items) == 0 for items in nodes_by_type.values()):
             return {
                 "outfit": None,
@@ -60,7 +61,6 @@ class OutfitSearcher:
         ordered_types = list(required_types)
         num_types = len(ordered_types)
 
-        # Pre-sort candidate items within each type by their total degree weight in graph
         candidates_by_level = []
         for t in ordered_types:
             cands = nodes_by_type[t]
@@ -71,12 +71,10 @@ class OutfitSearcher:
             )
             candidates_by_level.append(cands_sorted)
 
-        # Precompute maximum possible edge weight between each type pair for admissible upper bounding
         max_edge_between_types = {}
         for i in range(num_types):
             for j in range(i + 1, num_types):
                 max_w = 0.0
-                t1, t2 = ordered_types[i], ordered_types[j]
                 for item1 in candidates_by_level[i]:
                     for item2 in candidates_by_level[j]:
                         w = self._edge_weights.get((item1, item2), 0.0)
@@ -96,16 +94,11 @@ class OutfitSearcher:
                     best_combo = tuple(current_outfit)
                 return
 
-            # Calculate upper bound for remaining unassigned and cross-level pairs
             upper_bound = current_score
-
-            # 1. Potential edges between already assigned items and items at level..num_types-1
             for unassigned_level in range(level, num_types):
-                # Max edge to any of the already assigned items
                 for assigned_level in range(level):
                     upper_bound += max_edge_between_types.get((assigned_level, unassigned_level), 1.0)
 
-            # 2. Potential edges among unassigned items
             for i in range(level, num_types):
                 for j in range(i + 1, num_types):
                     upper_bound += max_edge_between_types.get((i, j), 1.0)
@@ -113,9 +106,7 @@ class OutfitSearcher:
             if upper_bound <= best_score:
                 return
 
-            # Branch on candidates at current level
             for candidate in candidates_by_level[level]:
-                # Contribution of this candidate with already chosen items
                 added_score = 0.0
                 for chosen in current_outfit:
                     added_score += self._edge_weights.get((candidate, chosen), 0.0)

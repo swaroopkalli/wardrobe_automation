@@ -2,9 +2,9 @@ from collections import defaultdict
 from itertools import combinations
 import networkx as nx
 import math
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Union
 
-from core.scoring import compatibility_score, _watch_representative_vec, _watch_hue
+from app.core.scoring import compatibility_score, watch_representative_vec, watch_hue
 
 
 def preprocess_item_attributes(item: Dict[str, Any]) -> Dict[str, Any]:
@@ -13,12 +13,12 @@ def preprocess_item_attributes(item: Dict[str, Any]) -> Dict[str, Any]:
         return item
 
     # Representative 3D vector and its Euclidean norm
-    vec = _watch_representative_vec(item) if item.get("type") == "watch" else item.get("color_vec", [0, 0, 0])
+    vec = watch_representative_vec(item) if item.get("type") == "watch" else item.get("color_vec", [0, 0, 0])
     item["_rep_vec"] = vec
     item["_rep_norm"] = math.sqrt(vec[0] ** 2 + vec[1] ** 2 + vec[2] ** 2) if vec else 0.0
 
     # Representative hue
-    item["_rep_hue"] = _watch_hue(item)
+    item["_rep_hue"] = watch_hue(item)
 
     # Precomputed frozenset for Jaccard vibe overlap
     raw_vibe = item.get("vibe") or []
@@ -37,11 +37,8 @@ def preprocess_item_attributes(item: Dict[str, Any]) -> Dict[str, Any]:
 
 class WardrobeGraphBuilder:
 
-    def __init__(self, df_or_items):
-        if hasattr(df_or_items, "to_dict"):
-            self.items = [preprocess_item_attributes(r) for r in df_or_items.to_dict("records")]
-        else:
-            self.items = [preprocess_item_attributes(dict(r)) for r in df_or_items]
+    def __init__(self, items: List[Dict[str, Any]]):
+        self.items = [preprocess_item_attributes(dict(r)) for r in items]
         self.graph = nx.Graph()
 
     def build_graph(self) -> nx.Graph:
@@ -51,14 +48,14 @@ class WardrobeGraphBuilder:
 
     def _add_nodes(self):
         for item in self.items:
+            identifier = item.get("item_name") or str(item.get("id"))
             self.graph.add_node(
-                item["item_name"],
+                identifier,
                 type=item["type"],
                 data=item
             )
 
     def _add_edges(self):
-        # Organize items by type to only evaluate cross-type pairs (O(sum(N_i * N_j)))
         items_by_type: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         for item in self.items:
             items_by_type[item["type"]].append(item)
@@ -66,16 +63,15 @@ class WardrobeGraphBuilder:
         types = list(items_by_type.keys())
 
         for t1, t2 in combinations(types, 2):
-            list1 = items_by_type[t1]
-            list2 = items_by_type[t2]
-
-            for item1 in list1:
-                for item2 in list2:
+            for item1 in items_by_type[t1]:
+                for item2 in items_by_type[t2]:
                     score = compatibility_score(item1, item2)
                     if score > 0.35:
+                        id1 = item1.get("item_name") or str(item1.get("id"))
+                        id2 = item2.get("item_name") or str(item2.get("id"))
                         self.graph.add_edge(
-                            item1["item_name"],
-                            item2["item_name"],
+                            id1,
+                            id2,
                             weight=score
                         )
 

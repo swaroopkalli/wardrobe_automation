@@ -1,91 +1,253 @@
-# Wardrobe Automation
-git 
-A lightweight wardrobe outfit suggestion app that recommends style combinations based on item attributes, color theory, and a graph-based compatibility engine.
+# Wardrobe AI — Outfit Recommendation Engine + 3D Frontend
 
-## 🚀 Project Overview
-
-The project has three main layers:
-
-1. **Data Loader** (`core/data_loader.py`) - loads item data from `data/wadrobe.csv` and extracts structured item features.
-2. **Graph Builder** (`core/graph_builder.py`) - constructs a weighted compatibility graph where nodes are wardrobe items and edges represent stylistic similarity.
-3. **Outfit Searcher** (`core/outfit_search.py`) - finds outfit suggestions using greedy, best, and random path search methods over the graph.
-
-The backend API is in `api/app.py`, and a simple static frontend is in `ui/`.
-
-## 🧠 Core Concepts
-
-### Color Theory Engine
-
-The app uses color attributes in each item to compute similarity:
-- Parse color and vibe fields from the raw CSV
-- Compute compatibility using color distance and vibe overlap
-- Score item pairs so that similar/correct-color outfits are preferred
-
-This is primarily implemented in `core/color_theory.py` and integrated during graph edge construction.
-
-### Graph Engine
-
-`core/graph_builder.py` builds an undirected weighted graph (networkx) where:
-- Nodes = wardrobe items
-- Edge weight = compatibility score (higher means more compatible)
-
-This graph enables outfit search algorithms to traverse nearest neighbors and produce combinations that are stylistically coherent.
-
-### Outfit Search Strategies
-
-`core/outfit_search.py` supports:
-- `greedy_outfit(item)` – picks top-connected neighbors from a base item
-- `best_outfit()` – finds best outfit by scoring candidate sets using overall compatibility
-- `random_outfit(item)` – picks random item chains for variety
-
-## 🧩 Folder Structure
-
-- `api/` – Flask API server
-- `core/` – main logic modules (data loader, color theory, graph builder, search, scoring)
-- `data/` – input dataset CSV
-- `ui/` – static frontend HTML/CSS/JS
-
-## ▶️ Run Locally
-
-1. Create and activate your venv:
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
-2. Run backend API:
-   ```bash
-   python3 api/app.py
-   ```
-3. Serve UI (or open directly):
-   ```bash
-   cd ui
-   python3 -m http.server 8000
-   ```
-4. Open frontend at `http://127.0.0.1:8000` and use the dropdown to get outfit suggestions.
-
-## 🔧 API Endpoints
-
-- `GET /` – health message
-- `GET /items` – all items
-- `GET /items/<type>` – items filtered by type
-- `GET /suggest/<item_name>` – suggest outfit starting from item
-- `GET /best` – best outfit suggestion
-- `GET /random/<item_name>` – random outfit chain
-- `GET /graph/stats` – nodes and edges counts
-
-## ✅ Quick Troubleshooting
-
-- If UI dropdown is empty:
-  1) Ensure backend is running on `http://127.0.0.1:5000`
-  2) Ensure CORS is enabled in `api/app.py` (`flask-cors` installed)
-  3) Serve UI from `http://127.0.0.1:8000` and open browser console for errors.
-
-## 📌 Notes
-
-- The system is designed for experimentation. Add new item rows in `data/wadrobe.csv` (with `item_name`, `type`, `color`, `vibe`, etc.) and the graph will adapt.
-- For better outfits, tune scoring logic in `core/scoring.py` and similarity rules in `core/color_theory.py`.
+A full-stack, AI-powered wardrobe assistant. Combines an optimized graph-based outfit recommendation engine (Stage 1), a modern FastAPI/PostgreSQL/Redis backend (Stage 2), and an interactive Next.js + React Three Fiber frontend with a procedural 3D avatar viewer and animated particle field (Stage 3).
 
 ---
 
-Built for quick wardrobe automation and outfit recommendation demos.
+## 🚀 Architecture Overview
+
+```text
+Next.js Frontend (Stage 3)
+  ├── Interactive Particle Field (Canvas / rAF)
+  ├── Wardrobe Browser + Recommendation UI
+  └── React Three Fiber — 3D Avatar Viewer
+             │
+             ▼ HTTP (localhost:8000/api/v1)
+FastAPI Backend (Stage 2)
+             │
+             ▼
+  Services (WardrobeService, RecommendationService)
+     │                        │
+     ▼                        ▼
+PostgreSQL (SQLAlchemy)   Stage 1 Graph Engine
+                          (Branch & Bound Searcher)
+     │                        │
+     ▼                        ▼
+Persistence             Recommendation Output
+         ▲             ▲
+         └─── Redis ───┘
+          (Cache-Aside)
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 15 (App Router), TypeScript, Tailwind CSS |
+| 3D Viewer | React Three Fiber, `@react-three/drei`, Three.js |
+| Particles | HTML Canvas + `requestAnimationFrame` (no DOM elements) |
+| Backend | FastAPI, Python 3.11+ |
+| Database | PostgreSQL + SQLAlchemy ORM + Alembic |
+| Cache | Redis (Cache-Aside pattern) |
+| Engine | Branch & Bound graph search, cosine similarity scoring |
+
+---
+
+## 📦 Prerequisites
+
+Make sure you have the following installed:
+
+- **Python 3.10+**
+- **Node.js 20+** and **npm 10+**
+- **PostgreSQL** (running on `localhost:5432`)
+- **Redis** (running on `localhost:6379`)
+
+---
+
+## ⚙️ Backend Setup
+
+### 1. Create & activate a Python virtual environment
+
+```bash
+cd d:\Swaroop Personal\Wardrobe\wardrobe_automation
+
+python -m venv .venv
+
+# Windows PowerShell:
+.\.venv\Scripts\Activate.ps1
+
+# Windows CMD:
+.venv\Scripts\activate.bat
+
+# macOS / Linux:
+source .venv/bin/activate
+```
+
+### 2. Install Python dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Configure environment variables
+
+Copy the example `.env` and update credentials:
+
+```bash
+cp .env.example .env
+```
+
+Default values that should work with a local Postgres/Redis:
+
+```env
+ENVIRONMENT=development
+DEBUG=True
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/wardrobe
+REDIS_URL=redis://localhost:6379/0
+CACHE_TTL_SECONDS=3600
+CACHE_ENABLED=True
+```
+
+### 4. Run database migrations
+
+```bash
+cd backend
+python -m alembic upgrade head
+cd ..
+```
+
+### 5. Import initial wardrobe data from CSV
+
+```bash
+python backend/scripts/import_csv.py
+```
+
+### 6. Start the FastAPI server
+
+```bash
+uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Backend will be live at:
+- **API Base**: http://localhost:8000/api/v1
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+---
+
+## 🖥️ Frontend Setup (Stage 3)
+
+Open a **new terminal** (keep the backend running).
+
+### 1. Install frontend dependencies
+
+```bash
+cd frontend
+npm install
+```
+
+### 2. Start the Next.js dev server
+
+```bash
+npm run dev
+```
+
+Frontend will be live at: **http://localhost:3000**
+
+> **Note:** The frontend proxies API calls to `http://localhost:8000/api/v1`. Make sure the backend is running before loading the UI.
+
+---
+
+## 🎮 Using the App
+
+Once both servers are running:
+
+1. Open **http://localhost:3000** in your browser.
+2. The **left panel** shows your wardrobe and the recommendation action.
+3. Click **"Recommend Best Outfit"** — the engine runs Branch & Bound and returns the highest-scored outfit.
+4. The **3D avatar** in the right panel updates its clothing colors to match the recommended outfit.
+5. **Drag to rotate**, **scroll to zoom** the avatar.
+6. Move your cursor over the left panel to interact with the **ambient particle field**.
+
+---
+
+## 📡 API Reference
+
+### Wardrobe Items (`/api/v1/wardrobe/items`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/wardrobe/items` | List all items (`?type=shirt`, `?category=tops`) |
+| `GET` | `/api/v1/wardrobe/items/{id}` | Get a single item |
+| `POST` | `/api/v1/wardrobe/items` | Create a new item |
+| `PUT` | `/api/v1/wardrobe/items/{id}` | Update an item |
+| `DELETE` | `/api/v1/wardrobe/items/{id}` | Delete an item |
+
+### Recommendations (`/api/v1/recommendations`)
+
+```bash
+curl -X POST http://localhost:8000/api/v1/recommendations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "required_types": ["shirt", "pants", "shoes", "jacket"],
+    "strategy": "best",
+    "formality": 7.0,
+    "vibes": ["clean", "minimal"]
+  }'
+```
+
+---
+
+## 🧪 Running Tests & Benchmarks
+
+### Backend tests (pytest)
+
+```bash
+pytest -v
+```
+
+### Stage 1 scaling benchmarks
+
+```bash
+python -m benchmarks.benchmark_stage1
+```
+
+---
+
+## 🌟 Stage 3 Feature: Interactive Particle Field
+
+The left panel background features a canvas-based ambient particle field:
+
+- **At rest** — calm indigo/purple dots float with gentle sine-wave drift.
+- **Cursor moves** — nearby particles repel with smooth spring physics and distance-based falloff.
+- **Cursor stops** — particles gradually settle back.
+- **Cursor leaves** — ambient drift resumes.
+- **Mobile** — reduced particle density, touch-only (no cursor).
+- **`prefers-reduced-motion`** — particles are static, no animation.
+
+The canvas uses `pointer-events: none` — all UI elements remain fully clickable.
+
+---
+
+## 🗂️ Project Structure
+
+```text
+wardrobe_automation/
+├── backend/
+│   ├── app/
+│   │   ├── main.py              # FastAPI entry point
+│   │   ├── api/routes/          # wardrobe.py, recommendations.py, legacy.py
+│   │   ├── core/                # scoring/, graph/, recommendation/
+│   │   ├── models/wardrobe.py   # SQLAlchemy models
+│   │   ├── schemas/             # Pydantic schemas
+│   │   ├── services/            # Business logic layer
+│   │   └── db/                  # Database connection
+│   ├── migrations/              # Alembic migration files
+│   └── scripts/import_csv.py    # CSV import utility
+├── frontend/
+│   └── src/
+│       ├── app/                 # Next.js App Router pages
+│       ├── components/
+│       │   ├── WardrobeApp.tsx  # Main app component
+│       │   ├── 3d/
+│       │   │   └── AvatarViewer.tsx        # React Three Fiber 3D viewer
+│       │   └── effects/
+│       │       └── InteractiveParticleField.tsx  # Canvas particle system
+│       └── lib/api.ts           # FastAPI client (fetch)
+├── benchmarks/benchmark_stage1.py
+├── tests/
+├── data/
+└── requirements.txt
+```
